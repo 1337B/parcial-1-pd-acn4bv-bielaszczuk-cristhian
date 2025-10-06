@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { SpeedConfig, SpeedRule, Surface, DayPeriod } from '@/domain';
-import { get, STORAGE_KEYS } from '@/lib/storage/safeStorage';
+import { SpeedConfig, SpeedRule, Surface, DayPeriod, WeatherSnapshot } from '@/domain';
+import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { useWeather } from '@/hooks';
 
 interface LocationInputs {
@@ -21,6 +21,13 @@ interface CalculationResult {
   };
 }
 
+interface SpeedHistoryEntry {
+  timestampISO: string;
+  configSnapshot: SpeedConfig;
+  weatherSnapshot?: WeatherSnapshot;
+  computedMax: number;
+}
+
 // Locacion random solo para testeo
 const DEFAULT_LOCATION: LocationInputs = {
   lat: '45.5017',
@@ -33,6 +40,7 @@ export default function DriverDashboard() {
   const [useExternalWeather, setUseExternalWeather] = useState(false);
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [history, setHistory] = useState<SpeedHistoryEntry[]>([]);
 
   const { data: weatherData, loading: weatherLoading, error: weatherError } = useWeather(
     useExternalWeather ? parseFloat(location.lat) : null,
@@ -43,6 +51,11 @@ export default function DriverDashboard() {
   useEffect(() => {
     const savedConfig = get<SpeedConfig>(STORAGE_KEYS.SAFE_SPEED_CONFIG);
     setConfig(savedConfig);
+  }, []);
+
+  useEffect(() => {
+    const savedHistory = get<SpeedHistoryEntry[]>(STORAGE_KEYS.SAFE_SPEED_HISTORY) || [];
+    setHistory(savedHistory);
   }, []);
 
   const handleRecalculate = () => {
@@ -62,8 +75,10 @@ export default function DriverDashboard() {
     const precipitationFactor = useExternalWeather && weatherData ? getPrecipitationFactor(weatherData.precipitationType) : undefined;
     const windFactor = useExternalWeather && weatherData && weatherData.windKph > 40 ? 0.9 : undefined;
 
+    const computedMax = rule.computeMaxSafeSpeed();
+
     const result: CalculationResult = {
-      maxSafeSpeed: rule.computeMaxSafeSpeed(),
+      maxSafeSpeed: computedMax,
       factors: {
         surface: surfaceFactor,
         dayPeriod: dayPeriodFactor,
@@ -72,8 +87,44 @@ export default function DriverDashboard() {
       }
     };
 
+    const historyEntry: SpeedHistoryEntry = {
+      timestampISO: new Date().toISOString(),
+      configSnapshot: { ...config },
+      weatherSnapshot: useExternalWeather && config.enableExternalWeather && weatherData ? { ...weatherData } : undefined,
+      computedMax: computedMax,
+    };
+
+    const updatedHistory = [historyEntry, ...history];
+    setHistory(updatedHistory);
+    set(STORAGE_KEYS.SAFE_SPEED_HISTORY, updatedHistory);
+
     setCalculationResult(result);
     setIsCalculating(false);
+  };
+
+  const handleClearHistory = () => {
+    const confirmed = confirm(
+      'Are you sure you want to clear all speed calculation history? This action cannot be undone.'
+    );
+
+    if (confirmed) {
+      setHistory([]);
+      set(STORAGE_KEYS.SAFE_SPEED_HISTORY, []);
+    }
+  };
+
+  const getSafetyStatus = (entry: SpeedHistoryEntry, currentSpeed: number = 45): 'safe' | 'caution' => {
+    return currentSpeed <= entry.computedMax ? 'safe' : 'caution';
+  };
+
+  const formatTimestamp = (timestampISO: string): string => {
+    const date = new Date(timestampISO);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const getSurfaceFactor = (surface: Surface): number => {
@@ -140,12 +191,10 @@ export default function DriverDashboard() {
         <p className="text-gray-600">Your personal driver portal and speed calculator</p>
       </div>
 
-      {/* Speed Calculator */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Safe Speed Calculator</h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Inputs */}
           <div className="space-y-4">
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-3">Location</h4>
@@ -275,6 +324,69 @@ export default function DriverDashboard() {
             <dd className="text-lg font-semibold text-gray-900">{config.enableExternalWeather ? 'Enabled' : 'Disabled'}</dd>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Calculation History</h3>
+          {history.length > 0 && (
+            <button
+              onClick={handleClearHistory}
+              className="px-3 py-1 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+            >
+              Clear History
+            </button>
+          )}
+        </div>
+
+        {history.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">No calculations yet. Use the calculator above to start tracking your speed calculations.</p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {history.map((entry, index) => {
+              const safetyStatus = getSafetyStatus(entry);
+              return (
+                <div
+                  key={entry.timestampISO}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="flex-shrink-0">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        safetyStatus === 'safe' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {safetyStatus === 'safe' ? 'Safe' : 'Caution'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        Max Speed: {entry.computedMax} km/h
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatTimestamp(entry.timestampISO)} •
+                        {entry.configSnapshot.surface} •
+                        {entry.configSnapshot.dayPeriod}
+                        {entry.weatherSnapshot && (
+                          <> • {entry.weatherSnapshot.precipitationType} • {entry.weatherSnapshot.windKph} km/h wind</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-gray-900">{entry.computedMax}</div>
+                      <div className="text-xs text-gray-500">km/h</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
