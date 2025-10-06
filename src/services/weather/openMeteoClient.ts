@@ -25,7 +25,6 @@ export class OpenMeteoClient {
    */
   static async getCurrentWeather(lat: number, lon: number): Promise<WeatherSnapshot> {
     try {
-      // Construct API URL with required parameters
       const url = new URL(this.BASE_URL);
       url.searchParams.set('latitude', lat.toString());
       url.searchParams.set('longitude', lon.toString());

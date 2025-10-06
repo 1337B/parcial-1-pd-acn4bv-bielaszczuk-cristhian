@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { SpeedConfig, Surface, DayPeriod } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 interface FormData {
   baseSpeedLimit: string;
@@ -19,6 +20,14 @@ const DEFAULT_CONFIG: SpeedConfig = {
 };
 
 export default function AdminSettings() {
+  return (
+    <ProtectedRoute requiredRole="admin">
+      <AdminSettingsContent />
+    </ProtectedRoute>
+  );
+}
+
+function AdminSettingsContent() {
   const [formData, setFormData] = useState<FormData>({
     baseSpeedLimit: DEFAULT_CONFIG.baseSpeedLimit.toString(),
     surface: DEFAULT_CONFIG.surface,

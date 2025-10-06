@@ -1,21 +1,26 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function Home() {
+interface ProtectedRouteProps {
+  children: ReactNode;
+  requiredRole?: 'admin' | 'driver';
+}
+
+export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
     if (!isLoading) {
-      if (user) {
-        redirect('/driver');
-      } else {
+      if (!user) {
         redirect('/login');
+      } else if (requiredRole && user.role !== requiredRole) {
+        redirect(user.role === 'admin' ? '/admin' : '/driver');
       }
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, requiredRole]);
 
   if (isLoading) {
     return (
@@ -28,5 +33,13 @@ export default function Home() {
     );
   }
 
-  return null;
+  if (!user) {
+    return null;
+  }
+
+  if (requiredRole && user.role !== requiredRole) {
+    return null;
+  }
+
+  return <>{children}</>;
 }
