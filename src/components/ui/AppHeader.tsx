@@ -20,23 +20,9 @@ export function AppHeader() {
         <nav className="flex items-center space-x-6">
           {user ? (
             <>
-              {user.role === 'admin' && (
-                <Link
-                  href="/admin"
-                  className="text-gray-300 hover:text-white transition-colors"
-                >
-                  Admin Settings
-                </Link>
-              )}
-              <Link
-                href="/driver"
-                className="text-gray-300 hover:text-white transition-colors"
-              >
-                Driver Dashboard
-              </Link>
               <div className="flex items-center space-x-3">
                 <span className="text-sm text-gray-400">
-                  {user.email} ({user.role})
+                  {user.email}
                 </span>
                 <button
                   onClick={handleLogout}

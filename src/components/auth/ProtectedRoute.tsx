@@ -17,7 +17,12 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
       if (!user) {
         redirect('/login');
       } else if (requiredRole && user.role !== requiredRole) {
-        redirect(user.role === 'admin' ? '/admin' : '/driver');
+        if (requiredRole === 'admin' && user.role === 'driver') {
+          redirect('/driver');
+        }
+        else if (requiredRole === 'driver' && user.role === 'admin') {
+          redirect('/admin');
+        }
       }
     }
   }, [user, isLoading, requiredRole]);
