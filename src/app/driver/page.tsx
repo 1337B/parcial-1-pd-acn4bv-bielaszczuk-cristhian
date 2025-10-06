@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { SpeedConfig, SpeedRule, Surface, DayPeriod, WeatherSnapshot } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { useWeather } from '@/hooks';
+import { debounce } from '@/lib/debounce';
 
 interface LocationInputs {
   lat: string;
@@ -41,6 +42,9 @@ export default function DriverDashboard() {
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [history, setHistory] = useState<SpeedHistoryEntry[]>([]);
+  const [currentSpeedInput, setCurrentSpeedInput] = useState('45');
+  const [currentSpeed, setCurrentSpeed] = useState(45);
+  const [speedValidationError, setSpeedValidationError] = useState<string | null>(null);
 
   const { data: weatherData, loading: weatherLoading, error: weatherError } = useWeather(
     useExternalWeather ? parseFloat(location.lat) : null,
@@ -57,6 +61,26 @@ export default function DriverDashboard() {
     const savedHistory = get<SpeedHistoryEntry[]>(STORAGE_KEYS.SAFE_SPEED_HISTORY) || [];
     setHistory(savedHistory);
   }, []);
+
+  const debouncedSpeedUpdate = useCallback(
+    debounce((speedStr: string) => {
+      const speed = parseFloat(speedStr);
+
+      if (isNaN(speed) || speed < 0 || speed > 200) {
+        setSpeedValidationError('Speed must be between 0 and 200 km/h');
+        return;
+      }
+
+      setSpeedValidationError(null);
+      setCurrentSpeed(speed);
+    }, 300),
+    []
+  );
+
+  const handleSpeedInputChange = (value: string) => {
+    setCurrentSpeedInput(value);
+    debouncedSpeedUpdate(value);
+  };
 
   const handleRecalculate = () => {
     if (!config) return;
@@ -113,7 +137,17 @@ export default function DriverDashboard() {
     }
   };
 
-  const getSafetyStatus = (entry: SpeedHistoryEntry, currentSpeed: number = 45): 'safe' | 'caution' => {
+  const getSpeedColor = (maxSafeSpeed: number, currentSpeed: number): string => {
+    if (currentSpeed <= maxSafeSpeed) {
+      return 'bg-green-100 border-4 border-green-500';
+    } else if (currentSpeed <= maxSafeSpeed + 10) {
+      return 'bg-amber-100 border-4 border-amber-500';
+    } else {
+      return 'bg-red-100 border-4 border-red-500';
+    }
+  };
+
+  const getSafetyStatus = (entry: SpeedHistoryEntry, currentSpeed: number = currentSpeed): 'safe' | 'caution' => {
     return currentSpeed <= entry.computedMax ? 'safe' : 'caution';
   };
 
@@ -228,6 +262,27 @@ export default function DriverDashboard() {
               </div>
             </div>
 
+            <div>
+              <label htmlFor="currentSpeed" className="block text-sm font-medium text-gray-700 mb-1">
+                Current Speed (km/h)
+              </label>
+              <input
+                type="number"
+                id="currentSpeed"
+                min="0"
+                max="200"
+                value={currentSpeedInput}
+                onChange={(e) => handleSpeedInputChange(e.target.value)}
+                className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  speedValidationError ? 'border-red-300' : 'border-gray-300'
+                }`}
+                placeholder="Enter your current speed"
+              />
+              {speedValidationError && (
+                <p className="mt-1 text-sm text-red-600">{speedValidationError}</p>
+              )}
+            </div>
+
             <div className="flex items-center">
               <input
                 id="useExternalWeather"
@@ -263,9 +318,7 @@ export default function DriverDashboard() {
                   <div className="relative">
                     <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center">
                       <div className={`w-24 h-24 rounded-full flex items-center justify-center ${
-                        calculationResult.maxSafeSpeed >= 50 ? 'bg-green-100 border-4 border-green-500' :
-                        calculationResult.maxSafeSpeed >= 30 ? 'bg-yellow-100 border-4 border-yellow-500' :
-                        'bg-red-100 border-4 border-red-500'
+                        getSpeedColor(calculationResult.maxSafeSpeed, currentSpeed)
                       }`}>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-gray-900">{calculationResult.maxSafeSpeed}</div>
@@ -275,6 +328,20 @@ export default function DriverDashboard() {
                     </div>
                   </div>
                   <h4 className="text-lg font-semibold text-gray-900 mt-3">Max Safe Speed</h4>
+
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      currentSpeed <= calculationResult.maxSafeSpeed 
+                        ? 'bg-green-100 text-green-800'
+                        : currentSpeed <= calculationResult.maxSafeSpeed + 10
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      Current: {currentSpeed} km/h
+                      {currentSpeed <= calculationResult.maxSafeSpeed ? ' ✓ Safe' :
+                       currentSpeed <= calculationResult.maxSafeSpeed + 10 ? ' ⚠ Caution' : ' ⚠ Unsafe'}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
