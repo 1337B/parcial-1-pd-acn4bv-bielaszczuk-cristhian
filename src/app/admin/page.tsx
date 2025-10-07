@@ -441,27 +441,27 @@ function AdminSettingsContent() {
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Applied Factors</h4>
                 <dl className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <dt className="text-gray-600">Base Speed Limit:</dt>
-                    <dd className="font-medium">{formData.baseSpeedLimit} km/h</dd>
+                    <dt className="text-gray-700">Base Speed Limit:</dt>
+                    <dd className="font-semibold text-gray-900">{formData.baseSpeedLimit} km/h</dd>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <dt className="text-gray-600">Surface Factor:</dt>
-                    <dd className="font-medium">×{surfaceFactor(formData.surface)} ({surfaceLabel(formData.surface)})</dd>
+                    <dt className="text-gray-700">Surface Factor:</dt>
+                    <dd className="font-semibold text-gray-900">×{surfaceFactor(formData.surface)} ({surfaceLabel(formData.surface)})</dd>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <dt className="text-gray-600">Day Period Factor:</dt>
-                    <dd className="font-medium">×{dayPeriodFactor(formData.dayPeriod)} ({dayPeriodLabel(formData.dayPeriod)})</dd>
+                    <dt className="text-gray-700">Day Period Factor:</dt>
+                    <dd className="font-semibold text-gray-900">×{dayPeriodFactor(formData.dayPeriod)} ({dayPeriodLabel(formData.dayPeriod)})</dd>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <dt className="text-gray-600">External Weather:</dt>
-                    <dd className="font-medium">{formData.enableExternalWeather ? 'Enabled' : 'Disabled'}</dd>
+                    <dt className="text-gray-700">External Weather:</dt>
+                    <dd className="font-semibold text-gray-900">{formData.enableExternalWeather ? 'Enabled' : 'Disabled'}</dd>
                   </div>
                 </dl>
               </div>
 
               <div className="bg-gray-50 p-3 rounded-md">
                 <h5 className="text-xs font-medium text-gray-700 mb-1">Calculation</h5>
-                <p className="text-xs text-gray-600">
+                <p className="text-sm font-medium text-gray-800">
                   {formData.baseSpeedLimit} × {surfaceFactor(formData.surface)} × {dayPeriodFactor(formData.dayPeriod)} = {livePreview} km/h
                 </p>
               </div>
