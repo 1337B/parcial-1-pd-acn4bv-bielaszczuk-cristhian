@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { SpeedConfig, Surface, DayPeriod, SpeedRule } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { surfaceLabel, surfaceFactor, dayPeriodLabel, dayPeriodFactor } from '@/lib/mappers';
 
 interface FormData {
   baseSpeedLimit: string;
@@ -155,19 +156,6 @@ function AdminSettingsContent() {
     }
   };
 
-  const getSurfaceFactor = (surface: Surface): number => {
-    switch (surface) {
-      case Surface.asphalt: return 1.0;
-      case Surface.gravel: return 0.8;
-      case Surface.dirt: return 0.7;
-      default: return 1.0;
-    }
-  };
-
-  const getDayPeriodFactor = (dayPeriod: DayPeriod): number => {
-    return dayPeriod === DayPeriod.day ? 1.0 : 0.9;
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -175,7 +163,6 @@ function AdminSettingsContent() {
         <p className="text-gray-600">System administration and fleet management configuration</p>
       </div>
 
-      {/* Success Toast */}
       {showToast && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex">
@@ -192,12 +179,10 @@ function AdminSettingsContent() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Configuration Form */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Speed Configuration</h3>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Base Speed Limit */}
             <div>
               <label htmlFor="baseSpeedLimit" className="block text-sm font-medium text-gray-700 mb-2">
                 Base Speed Limit (km/h)
@@ -219,7 +204,6 @@ function AdminSettingsContent() {
               )}
             </div>
 
-            {/* Surface Type */}
             <div>
               <label htmlFor="surface" className="block text-sm font-medium text-gray-700 mb-2">
                 Road Surface
@@ -236,7 +220,6 @@ function AdminSettingsContent() {
               </select>
             </div>
 
-            {/* Day Period */}
             <div>
               <fieldset>
                 <legend className="block text-sm font-medium text-gray-700 mb-2">Day Period</legend>
@@ -267,7 +250,6 @@ function AdminSettingsContent() {
               </fieldset>
             </div>
 
-            {/* Enable External Weather */}
             <div className="flex items-center">
               <input
                 id="enableExternalWeather"
@@ -281,14 +263,12 @@ function AdminSettingsContent() {
               </label>
             </div>
 
-            {/* Form Errors */}
             {errors.submit && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <p className="text-sm text-red-800">{errors.submit}</p>
               </div>
             )}
 
-            {/* Form Actions */}
             <div className="flex justify-between">
               <div className="space-x-3">
                 <button
@@ -320,13 +300,11 @@ function AdminSettingsContent() {
           </form>
         </div>
 
-        {/* Live Preview Card */}
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Live Preview</h3>
 
           {livePreview !== null ? (
             <div className="space-y-4">
-              {/* Speed Display */}
               <div className="text-center">
                 <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-blue-100 border-4 border-blue-500 mb-3">
                   <div className="text-center">
@@ -340,7 +318,6 @@ function AdminSettingsContent() {
                 )}
               </div>
 
-              {/* Applied Factors */}
               <div>
                 <h5 className="text-sm font-medium text-gray-700 mb-2">Applied Factors</h5>
                 <div className="space-y-2">
@@ -350,11 +327,11 @@ function AdminSettingsContent() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Surface Factor:</span>
-                    <span className="font-medium">×{getSurfaceFactor(formData.surface)} ({formData.surface})</span>
+                    <span className="font-medium">×{surfaceFactor(formData.surface)} ({formData.surface})</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Day Period Factor:</span>
-                    <span className="font-medium">×{getDayPeriodFactor(formData.dayPeriod)} ({formData.dayPeriod})</span>
+                    <span className="font-medium">×{dayPeriodFactor(formData.dayPeriod)} ({formData.dayPeriod})</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">External Weather:</span>
@@ -363,11 +340,10 @@ function AdminSettingsContent() {
                 </div>
               </div>
 
-              {/* Calculation Breakdown */}
               <div className="bg-gray-50 p-3 rounded-md">
                 <h6 className="text-xs font-medium text-gray-700 mb-1">Calculation</h6>
                 <p className="text-xs text-gray-600">
-                  {formData.baseSpeedLimit} × {getSurfaceFactor(formData.surface)} × {getDayPeriodFactor(formData.dayPeriod)} = {livePreview} km/h
+                  {formData.baseSpeedLimit} × {surfaceFactor(formData.surface)} × {dayPeriodFactor(formData.dayPeriod)} = {livePreview} km/h
                 </p>
               </div>
             </div>
@@ -384,7 +360,6 @@ function AdminSettingsContent() {
         </div>
       </div>
 
-      {/* Additional Admin Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">User Management</h3>

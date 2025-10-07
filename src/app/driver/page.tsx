@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SpeedConfig, SpeedRule, Surface, DayPeriod, WeatherSnapshot } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { useWeather } from '@/hooks';
+import { surfaceLabel, surfaceFactor, dayPeriodLabel, dayPeriodFactor, precipitationLabel, precipitationFactor } from '@/lib/mappers';
 
 interface LocationInputs {
   lat: string;
@@ -97,9 +98,9 @@ export default function DriverDashboard() {
       useExternalWeather && config.enableExternalWeather ? weatherData || undefined : undefined
     );
 
-    const surfaceFactor = getSurfaceFactor(config.surface);
-    const dayPeriodFactor = getDayPeriodFactor(config.dayPeriod);
-    const precipitationFactor = useExternalWeather && weatherData ? getPrecipitationFactor(weatherData.precipitationType) : undefined;
+    const surfaceFactorValue = surfaceFactor(config.surface);
+    const dayPeriodFactorValue = dayPeriodFactor(config.dayPeriod);
+    const precipitationFactorValue = useExternalWeather && weatherData ? precipitationFactor(weatherData.precipitationType) : undefined;
     const windFactor = useExternalWeather && weatherData && weatherData.windKph > 40 ? 0.9 : undefined;
 
     const computedMax = rule.computeMaxSafeSpeed();
@@ -107,9 +108,9 @@ export default function DriverDashboard() {
     const result: CalculationResult = {
       maxSafeSpeed: computedMax,
       factors: {
-        surface: surfaceFactor,
-        dayPeriod: dayPeriodFactor,
-        precipitation: precipitationFactor,
+        surface: surfaceFactorValue,
+        dayPeriod: dayPeriodFactorValue,
+        precipitation: precipitationFactorValue,
         wind: windFactor,
       }
     };
@@ -162,28 +163,6 @@ export default function DriverDashboard() {
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
-
-  const getSurfaceFactor = (surface: Surface): number => {
-    switch (surface) {
-      case Surface.asphalt: return 1.0;
-      case Surface.gravel: return 0.8;
-      case Surface.dirt: return 0.7;
-      default: return 1.0;
-    }
-  };
-
-  const getDayPeriodFactor = (dayPeriod: DayPeriod): number => {
-    return dayPeriod === DayPeriod.day ? 1.0 : 0.9;
-  };
-
-  const getPrecipitationFactor = (precipitationType: string): number => {
-    switch (precipitationType) {
-      case 'none': return 1.0;
-      case 'rain': return 0.85;
-      case 'snow': return 0.7;
-      default: return 1.0;
-    }
   };
 
   if (config === null) {
@@ -246,7 +225,7 @@ export default function DriverDashboard() {
               </div>
               {weatherData && (
                 <div className="mt-2 text-xs text-orange-600">
-                  Last known: {weatherData.precipitationType}, {weatherData.tempC}°C, {weatherData.windKph} km/h wind
+                  Last known: {precipitationLabel(weatherData.precipitationType)}, {weatherData.tempC}°C, {weatherData.windKph} km/h wind
                 </div>
               )}
             </div>
@@ -409,11 +388,11 @@ export default function DriverDashboard() {
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-500">Surface</dt>
-            <dd className="text-lg font-semibold text-gray-900 capitalize">{config.surface}</dd>
+            <dd className="text-lg font-semibold text-gray-900">{surfaceLabel(config.surface)}</dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-500">Day Period</dt>
-            <dd className="text-lg font-semibold text-gray-900 capitalize">{config.dayPeriod}</dd>
+            <dd className="text-lg font-semibold text-gray-900">{dayPeriodLabel(config.dayPeriod)}</dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-500">External Weather</dt>
@@ -463,10 +442,10 @@ export default function DriverDashboard() {
                       </div>
                       <div className="text-xs text-gray-500">
                         {formatTimestamp(entry.timestampISO)} •
-                        {entry.configSnapshot.surface} •
-                        {entry.configSnapshot.dayPeriod}
+                        {surfaceLabel(entry.configSnapshot.surface)} •
+                        {dayPeriodLabel(entry.configSnapshot.dayPeriod)}
                         {entry.weatherSnapshot && (
-                          <> • {entry.weatherSnapshot.precipitationType} • {entry.weatherSnapshot.windKph} km/h wind</>
+                          <> • {precipitationLabel(entry.weatherSnapshot.precipitationType)} • {entry.weatherSnapshot.windKph} km/h wind</>
                         )}
                       </div>
                     </div>
