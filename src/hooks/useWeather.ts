@@ -3,19 +3,37 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WeatherSnapshot } from '@/domain';
 import { OpenMeteoClient, WeatherApiError } from '@/services/weather';
+import { get, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 
 interface UseWeatherState {
   data: WeatherSnapshot | null;
   loading: boolean;
   error: string | null;
+  isOffline: boolean;
 }
 
 interface UseWeatherReturn extends UseWeatherState {
   refresh: () => void;
 }
 
+function getLastKnownWeather(): WeatherSnapshot | null {
+  try {
+    const history = get<any[]>(STORAGE_KEYS.SAFE_SPEED_HISTORY) || [];
+
+    for (const entry of history) {
+      if (entry.weatherSnapshot) {
+        return entry.weatherSnapshot;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Custom hook for fetching and managing weather data.
+ * Custom hook for fetching and managing weather data with offline support.
  *
  * @param lat - Latitude coordinate
  * @param lon - Longitude coordinate
@@ -31,14 +49,36 @@ export function useWeather(
     data: null,
     loading: false,
     error: null,
+    isOffline: false,
   });
+
+  const isOffline = useCallback((): boolean => {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+  }, []);
 
   const fetchWeather = useCallback(async () => {
     if (!enabled || lat === null || lon === null) {
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    if (isOffline()) {
+      const lastKnownWeather = getLastKnownWeather();
+
+      setState({
+        data: lastKnownWeather,
+        loading: false,
+        error: 'offline',
+        isOffline: true,
+      });
+      return;
+    }
+
+    setState(prev => ({
+      ...prev,
+      loading: true,
+      error: null,
+      isOffline: false
+    }));
 
     try {
       const weatherData = await OpenMeteoClient.getCurrentWeather(lat, lon);
@@ -46,19 +86,37 @@ export function useWeather(
         data: weatherData,
         loading: false,
         error: null,
+        isOffline: false,
       });
     } catch (error) {
-      const errorMessage = error instanceof WeatherApiError
-        ? error.message
-        : 'Failed to fetch weather data';
+      let errorMessage: string;
+      let fallbackData: WeatherSnapshot | null = null;
+
+      if (error instanceof WeatherApiError) {
+        if (error.statusCode === undefined ||
+            (error.statusCode >= 500 && error.statusCode < 600) ||
+            error.message.toLowerCase().includes('network') ||
+            error.message.toLowerCase().includes('fetch')) {
+
+          errorMessage = 'offline';
+          fallbackData = getLastKnownWeather();
+        } else {
+          errorMessage = error.message;
+        }
+      } else {
+        errorMessage = 'offline';
+        fallbackData = getLastKnownWeather();
+      }
 
       setState({
-        data: null,
+        data: fallbackData,
         loading: false,
         error: errorMessage,
+        isOffline: errorMessage === 'offline',
       });
     }
-  }, [lat, lon, enabled]);
+  }, [lat, lon, enabled, isOffline]);
+
 
   const refresh = useCallback(() => {
     fetchWeather();
@@ -68,10 +126,40 @@ export function useWeather(
     fetchWeather();
   }, [fetchWeather]);
 
+  useEffect(() => {
+    const handleOnline = () => {
+      if (enabled && lat !== null && lon !== null) {
+        fetchWeather();
+      }
+    };
+
+    const handleOffline = () => {
+      if (state.loading) {
+        const lastKnownWeather = getLastKnownWeather();
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: 'offline',
+          isOffline: true,
+          data: lastKnownWeather || prev.data,
+        }));
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [enabled, lat, lon, fetchWeather, state.loading]);
+
   return {
     data: state.data,
     loading: state.loading,
     error: state.error,
+    isOffline: state.isOffline,
     refresh,
   };
 }

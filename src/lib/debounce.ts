@@ -6,7 +6,8 @@
  * @param delay - The delay in milliseconds
  * @returns A debounced version of the function
  */
-export function debounce<T extends (...args: unknown[]) => void>(func: T, delay: number): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => any>(func: T, delay: number): T {
   let timeoutId: ReturnType<typeof setTimeout>;
 
   return ((...args: Parameters<T>) => {

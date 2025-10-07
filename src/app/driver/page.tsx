@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { SpeedConfig, SpeedRule, Surface, DayPeriod, WeatherSnapshot } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { useWeather } from '@/hooks';
-import { debounce } from '@/lib/debounce';
 
 interface LocationInputs {
   lat: string;
@@ -46,7 +45,7 @@ export default function DriverDashboard() {
   const [currentSpeed, setCurrentSpeed] = useState(45);
   const [speedValidationError, setSpeedValidationError] = useState<string | null>(null);
 
-  const { data: weatherData, loading: weatherLoading, error: weatherError } = useWeather(
+  const { data: weatherData, loading: weatherLoading, error: weatherError, isOffline } = useWeather(
     useExternalWeather ? parseFloat(location.lat) : null,
     useExternalWeather ? parseFloat(location.lon) : null,
     useExternalWeather
@@ -62,20 +61,24 @@ export default function DriverDashboard() {
     setHistory(savedHistory);
   }, []);
 
-  const debouncedSpeedUpdate = useCallback(
-    debounce((speedStr: string) => {
-      const speed = parseFloat(speedStr);
+  const debouncedSpeedUpdate = useCallback(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-      if (isNaN(speed) || speed < 0 || speed > 200) {
-        setSpeedValidationError('Speed must be between 0 and 200 km/h');
-        return;
-      }
+    return (speedStr: string) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const speed = parseFloat(speedStr);
 
-      setSpeedValidationError(null);
-      setCurrentSpeed(speed);
-    }, 300),
-    []
-  );
+        if (isNaN(speed) || speed < 0 || speed > 200) {
+          setSpeedValidationError('Speed must be between 0 and 200 km/h');
+          return;
+        }
+
+        setSpeedValidationError(null);
+        setCurrentSpeed(speed);
+      }, 300);
+    };
+  }, [])();
 
   const handleSpeedInputChange = (value: string) => {
     setCurrentSpeedInput(value);
@@ -147,8 +150,8 @@ export default function DriverDashboard() {
     }
   };
 
-  const getSafetyStatus = (entry: SpeedHistoryEntry, currentSpeed: number = currentSpeed): 'safe' | 'caution' => {
-    return currentSpeed <= entry.computedMax ? 'safe' : 'caution';
+  const getSafetyStatus = (entry: SpeedHistoryEntry, checkSpeed: number = currentSpeed): 'safe' | 'caution' => {
+    return checkSpeed <= entry.computedMax ? 'safe' : 'caution';
   };
 
   const formatTimestamp = (timestampISO: string): string => {
@@ -224,6 +227,32 @@ export default function DriverDashboard() {
         <h1 className="text-2xl font-bold text-gray-900">Driver Dashboard</h1>
         <p className="text-gray-600">Your personal driver portal and speed calculator</p>
       </div>
+
+      {useExternalWeather && isOffline && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-orange-800">Weather Service Offline</h3>
+              <div className="mt-1 text-sm text-orange-700">
+                <p>
+                  Unable to fetch current weather data.
+                  {weatherData ? ' Using last known weather data for calculations.' : ' Weather factors will not be applied to speed calculations.'}
+                </p>
+              </div>
+              {weatherData && (
+                <div className="mt-2 text-xs text-orange-600">
+                  Last known: {weatherData.precipitationType}, {weatherData.tempC}°C, {weatherData.windKph} km/h wind
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Safe Speed Calculator</h3>
@@ -410,7 +439,7 @@ export default function DriverDashboard() {
           <p className="text-gray-500 text-center py-8">No calculations yet. Use the calculator above to start tracking your speed calculations.</p>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {history.map((entry, index) => {
+            {history.map((entry) => {
               const safetyStatus = getSafetyStatus(entry);
               return (
                 <div
