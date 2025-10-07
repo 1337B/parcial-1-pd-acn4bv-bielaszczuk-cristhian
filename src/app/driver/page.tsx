@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { SpeedConfig, SpeedRule, WeatherSnapshot } from '@/domain';
 import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
@@ -9,11 +9,6 @@ import { surfaceLabel, surfaceFactor, dayPeriodLabel, dayPeriodFactor, precipita
 import { WeatherSkeleton, EmptyState } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-
-interface LocationInputs {
-  lat: string;
-  lon: string;
-}
 
 interface CalculationResult {
   maxSafeSpeed: number;
@@ -32,82 +27,54 @@ interface SpeedHistoryEntry {
   computedMax: number;
 }
 
-// Locacion random solo para testeo
-const DEFAULT_LOCATION: LocationInputs = {
-  lat: '45.5017',
-  lon: '-73.5673'
-};
-
 export default function DriverDashboard() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const [config, setConfig] = useState<SpeedConfig | null>(null);
-  const [location, setLocation] = useState<LocationInputs>(DEFAULT_LOCATION);
-  const [useExternalWeather, setUseExternalWeather] = useState(false);
   const [calculationResult, setCalculationResult] = useState<CalculationResult | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [history, setHistory] = useState<SpeedHistoryEntry[]>([]);
-  const [currentSpeedInput, setCurrentSpeedInput] = useState('45');
-  const [currentSpeed, setCurrentSpeed] = useState(45);
-  const [speedValidationError, setSpeedValidationError] = useState<string | null>(null);
+  const [currentSpeed] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
-
-  const { data: weatherData, loading: weatherLoading, error: weatherError, isOffline } = useWeather(
-    useExternalWeather ? parseFloat(location.lat) : null,
-    useExternalWeather ? parseFloat(location.lon) : null,
-    useExternalWeather
-  );
 
   useEffect(() => {
     const savedConfig = get<SpeedConfig>(STORAGE_KEYS.SAFE_SPEED_CONFIG);
     setConfig(savedConfig);
   }, []);
 
+  const { data: weatherData, loading: weatherLoading, error: weatherError, isOffline } = useWeather(
+    config?.defaultLocation?.lat || null,
+    config?.defaultLocation?.lon || null,
+    !!config?.defaultLocation
+  );
+
   useEffect(() => {
     const savedHistory = get<SpeedHistoryEntry[]>(STORAGE_KEYS.SAFE_SPEED_HISTORY) || [];
     setHistory(savedHistory);
   }, []);
 
-  const debouncedSpeedUpdate = useCallback(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
+  useEffect(() => {
+    if (config && weatherData && !isRefreshing) {
+      handleRefresh();
+    }
+  }, [config, weatherData]);
 
-    return (speedStr: string) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const speed = parseFloat(speedStr);
-
-        if (isNaN(speed) || speed < 0 || speed > 200) {
-          setSpeedValidationError('Speed must be between 0 and 200 km/h');
-          return;
-        }
-
-        setSpeedValidationError(null);
-        setCurrentSpeed(speed);
-      }, 300);
-    };
-  }, [])();
-
-  const handleSpeedInputChange = (value: string) => {
-    setCurrentSpeedInput(value);
-    debouncedSpeedUpdate(value);
-  };
-
-  const handleRecalculate = () => {
+  const handleRefresh = async () => {
     if (!config) return;
 
-    setIsCalculating(true);
+    setIsRefreshing(true);
 
     const rule = new SpeedRule(
       config.baseSpeedLimit,
       config.surface,
       config.dayPeriod,
-      useExternalWeather && config.enableExternalWeather ? weatherData || undefined : undefined
+      weatherData || undefined
     );
 
     const surfaceFactorValue = surfaceFactor(config.surface);
     const dayPeriodFactorValue = dayPeriodFactor(config.dayPeriod);
-    const precipitationFactorValue = useExternalWeather && weatherData ? precipitationFactor(weatherData.precipitationType) : undefined;
-    const windFactor = useExternalWeather && weatherData && weatherData.windKph > 40 ? 0.9 : undefined;
+    const precipitationFactorValue = weatherData ? precipitationFactor(weatherData.precipitationType) : undefined;
+    const windFactor = weatherData && weatherData.windKph > 40 ? 0.9 : undefined;
 
     const computedMax = rule.computeMaxSafeSpeed();
 
@@ -124,7 +91,7 @@ export default function DriverDashboard() {
     const historyEntry: SpeedHistoryEntry = {
       timestampISO: new Date().toISOString(),
       configSnapshot: { ...config },
-      weatherSnapshot: useExternalWeather && config.enableExternalWeather && weatherData ? { ...weatherData } : undefined,
+      weatherSnapshot: weatherData ? { ...weatherData } : undefined,
       computedMax: computedMax,
     };
 
@@ -133,7 +100,7 @@ export default function DriverDashboard() {
     set(STORAGE_KEYS.SAFE_SPEED_HISTORY, updatedHistory);
 
     setCalculationResult(result);
-    setIsCalculating(false);
+    setIsRefreshing(false);
 
     setTimeout(() => {
       resultRef.current?.focus();
@@ -151,18 +118,8 @@ export default function DriverDashboard() {
     }
   };
 
-  const getSpeedColor = (maxSafeSpeed: number, currentSpeed: number): string => {
-    if (currentSpeed <= maxSafeSpeed) {
-      return 'bg-green-100 border-4 border-green-500';
-    } else if (currentSpeed <= maxSafeSpeed + 10) {
-      return 'bg-amber-100 border-4 border-amber-500';
-    } else {
-      return 'bg-red-100 border-4 border-red-500';
-    }
-  };
-
-  const getSafetyStatus = (entry: SpeedHistoryEntry, checkSpeed: number = currentSpeed): 'safe' | 'caution' => {
-    return checkSpeed <= entry.computedMax ? 'safe' : 'caution';
+  const getSpeedColor = (): string => {
+    return 'bg-blue-100 border-4 border-blue-500';
   };
 
   const formatTimestamp = (timestampISO: string): string => {
@@ -204,27 +161,23 @@ export default function DriverDashboard() {
           <p className="text-gray-300 mt-1">Your personal driver portal and speed calculator</p>
         </div>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        <div className="min-h-[400px] flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Configuration Required</h3>
-              <div className="mt-2 text-sm text-yellow-700">
-                <p>No speed configuration found. Please set up the system configuration first.</p>
-              </div>
-              <div className="mt-4">
-                <Link
-                  href="/admin"
-                  className="bg-yellow-100 px-3 py-2 rounded-md text-sm font-medium text-yellow-800 hover:bg-yellow-200"
-                >
-                  Go to Admin Settings
-                </Link>
-              </div>
-            </div>
+            <h2 className="text-xl font-semibold text-gray-100 mb-2">Configuration Required</h2>
+            <p className="text-gray-300 mb-6">
+              Please ask your administrator to set up FleetSafety parameters.
+            </p>
+            <Link
+              href="/admin"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              Go to Admin
+            </Link>
           </div>
         </div>
       </div>
@@ -233,24 +186,24 @@ export default function DriverDashboard() {
 
   return (
     <div className="space-y-6">
-      <a href="#main-calculator" className="skip-to-main">
-        Skip to calculator
-      </a>
-
       <div>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-100">Driver Dashboard</h1>
-        <p className="text-gray-300 mt-1">Your personal driver portal and speed calculator</p>
+        <p className="text-gray-300 mt-1">
+          <svg className="inline w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Read-only view - Configuration managed by admin
+        </p>
       </div>
 
-      {useExternalWeather && isOffline && (
+      {isOffline && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4" role="alert" aria-live="polite">
           <div className="flex">
             <div className="flex-shrink-0" aria-hidden="true">
               <svg className="h-5 w-5 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
-            </div>
-            <div className="ml-3">
+              <div className="ml-3">
               <h3 className="text-sm font-medium text-orange-800">Weather Service Offline</h3>
               <div className="mt-1 text-sm text-orange-700">
                 <p>
@@ -258,275 +211,217 @@ export default function DriverDashboard() {
                   {weatherData ? ' Using last known weather data for calculations.' : ' Weather factors will not be applied to speed calculations.'}
                 </p>
               </div>
-              {weatherData && (
-                <div className="mt-2 text-xs text-orange-600">
-                  Last known: {precipitationLabel(weatherData.precipitationType)}, {weatherData.tempC}°C, {weatherData.windKph} km/h wind
-                </div>
-              )}
             </div>
           </div>
         </div>
+        </div>
       )}
 
-      <div className="bg-white p-4 md:p-6 rounded-lg shadow" id="main-calculator">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">Safe Speed Calculator</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+          <div className="flex items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              <svg className="inline w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Location & Speed
+            </h2>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <fieldset>
-              <legend className="text-md font-medium text-gray-900 mb-3">Location</legend>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">
-                    Latitude <span className="text-red-500" aria-label="required">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    id="lat"
-                    name="latitude"
-                    step="any"
-                    value={location.lat}
-                    onChange={(e) => setLocation(prev => ({ ...prev, lat: e.target.value }))}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    aria-describedby="lat-description"
-                    required
-                  />
-                  <p id="lat-description" className="sr-only">Enter the latitude coordinate for your location</p>
-                </div>
-                <div>
-                  <label htmlFor="lon" className="block text-sm font-medium text-gray-700 mb-1">
-                    Longitude <span className="text-red-500" aria-label="required">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    id="lon"
-                    name="longitude"
-                    step="any"
-                    value={location.lon}
-                    onChange={(e) => setLocation(prev => ({ ...prev, lon: e.target.value }))}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    aria-describedby="lon-description"
-                    required
-                  />
-                  <p id="lon-description" className="sr-only">Enter the longitude coordinate for your location</p>
-                </div>
-              </div>
-            </fieldset>
-
-            <div>
-              <label htmlFor="currentSpeed" className="block text-sm font-medium text-gray-700 mb-1">
-                Current Speed (km/h) <span className="text-red-500" aria-label="required">*</span>
-              </label>
-              <input
-                type="number"
-                id="currentSpeed"
-                name="currentSpeed"
-                min="0"
-                max="200"
-                value={currentSpeedInput}
-                onChange={(e) => handleSpeedInputChange(e.target.value)}
-                className={`block w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  speedValidationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Enter your current speed"
-                aria-invalid={!!speedValidationError}
-                aria-describedby={speedValidationError ? 'speed-error' : 'speed-description'}
-                required
-              />
-              <p id="speed-description" className="sr-only">Enter a speed value between 0 and 200 km/h</p>
-              {speedValidationError && (
-                <p id="speed-error" className="mt-1 text-sm text-red-600" role="alert">
-                  {speedValidationError}
-                </p>
-              )}
+          <dl className="space-y-3">
+            <div className="flex justify-between items-center">
+              <dt className="text-sm font-medium text-gray-500">Location</dt>
+              <dd className="text-sm text-gray-900">
+                Latitude: {config.defaultLocation?.lat} | Longitude: {config.defaultLocation?.lon}
+              </dd>
             </div>
-
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="useExternalWeather"
-                  name="useExternalWeather"
-                  type="checkbox"
-                  checked={useExternalWeather}
-                  onChange={(e) => setUseExternalWeather(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  aria-describedby="weather-description"
-                />
-              </div>
-              <div className="ml-3">
-                <label htmlFor="useExternalWeather" className="text-sm font-medium text-gray-700">
-                  Use external weather data
-                </label>
-                <p id="weather-description" className="text-xs text-gray-500">
-                  Factor in real-time weather conditions for more accurate speed calculations
-                </p>
-              </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-sm font-medium text-gray-500">Current Speed (km/h)</dt>
+              <dd className="text-sm text-gray-900 font-semibold">{currentSpeed}</dd>
             </div>
+          </dl>
 
-            {useExternalWeather && weatherLoading && (
-              <div aria-live="polite" aria-busy="true">
-                <WeatherSkeleton />
-              </div>
-            )}
-
-            {useExternalWeather && weatherError && !isOffline && (
-              <div className="text-sm text-red-600" role="alert" aria-live="polite">
-                <strong>Weather error:</strong> {weatherError}
-              </div>
-            )}
-
-            {useExternalWeather && weatherData && !weatherLoading && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3" role="status" aria-live="polite">
-                <h4 className="text-sm font-medium text-blue-900 mb-1">Current Weather</h4>
-                <dl className="text-xs text-blue-700 space-y-1">
-                  <div className="flex justify-between">
-                    <dt>Conditions:</dt>
-                    <dd>{precipitationLabel(weatherData.precipitationType)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Temperature:</dt>
-                    <dd>{weatherData.tempC}°C</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Wind Speed:</dt>
-                    <dd>{weatherData.windKph} km/h</dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-
+          <div className="mt-6">
             <button
-              onClick={handleRecalculate}
-              disabled={isCalculating || (useExternalWeather && weatherLoading) || !!speedValidationError}
+              onClick={handleRefresh}
+              disabled={isRefreshing || weatherLoading}
               className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              aria-label="Calculate maximum safe speed"
             >
-              {isCalculating || (useExternalWeather && weatherLoading) ? (
+              {isRefreshing || weatherLoading ? (
                 <span className="flex items-center justify-center">
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Calculating...
+                  Refreshing...
                 </span>
-              ) : 'Calculate Safe Speed'}
+              ) : 'Refresh'}
             </button>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            {!calculationResult && !isCalculating ? (
-              <EmptyState
-                icon={
-                  <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                }
-                title="Ready to Calculate"
-                description="Enter your current speed and click 'Calculate Safe Speed' to see the maximum safe speed for current conditions."
-                action={undefined}
-              />
-            ) : calculationResult ? (
-              <div
-                ref={resultRef}
-                tabIndex={-1}
-                role="region"
-                aria-live="polite"
-                aria-label="Speed calculation result"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="relative">
-                    <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center" aria-hidden="true">
-                      <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-colors ${
-                        getSpeedColor(calculationResult.maxSafeSpeed, currentSpeed)
-                      }`}>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-900">{calculationResult.maxSafeSpeed}</div>
-                          <div className="text-xs text-gray-600">km/h</div>
-                        </div>
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+          {!calculationResult && !isRefreshing ? (
+            <EmptyState
+              icon={
+                <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              }
+              title="Ready to Calculate"
+              description="Click 'Refresh' to calculate the maximum safe speed for current conditions."
+              action={undefined}
+            />
+          ) : calculationResult ? (
+            <div
+              ref={resultRef}
+              tabIndex={-1}
+              role="region"
+              aria-live="polite"
+              aria-label="Speed calculation result"
+            >
+              <div className="flex flex-col items-center">
+                <div className="relative">
+                  <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center" aria-hidden="true">
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-colors ${
+                      getSpeedColor()
+                    }`}>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900">{calculationResult.maxSafeSpeed}</div>
+                        <div className="text-xs text-gray-600">km/h</div>
                       </div>
                     </div>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mt-3">Max Safe Speed</h3>
-                  <p className="sr-only">
-                    Maximum safe speed is {calculationResult.maxSafeSpeed} kilometers per hour.
-                    Your current speed of {currentSpeed} kilometers per hour is {
-                      currentSpeed <= calculationResult.maxSafeSpeed ? 'safe' :
-                      currentSpeed <= calculationResult.maxSafeSpeed + 10 ? 'cautionary' : 'unsafe'
-                    }.
-                  </p>
-
-                  <div className="mt-2">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      currentSpeed <= calculationResult.maxSafeSpeed 
-                        ? 'bg-green-100 text-green-800'
-                        : currentSpeed <= calculationResult.maxSafeSpeed + 10
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      Current: {currentSpeed} km/h
-                      {currentSpeed <= calculationResult.maxSafeSpeed ? ' ✓ Safe' :
-                       currentSpeed <= calculationResult.maxSafeSpeed + 10 ? ' ⚠ Caution' : ' ⚠ Unsafe'}
-                    </span>
-                  </div>
                 </div>
+                <h3 className="text-lg font-semibold text-gray-900 mt-3">Max Safe Speed</h3>
+                <p className="sr-only">
+                  Maximum safe speed is {calculationResult.maxSafeSpeed} kilometers per hour.
+                </p>
+              </div>
 
-                <div className="mt-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Applied Factors</h4>
-                  <div className="flex flex-wrap gap-2" role="list">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" role="listitem">
-                      Surface: ×{calculationResult.factors.surface}
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Applied Factors</h4>
+                <div className="flex flex-wrap gap-2" role="list">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" role="listitem">
+                    Surface: ×{calculationResult.factors.surface}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800" role="listitem">
+                    {dayPeriodLabel(config.dayPeriod)}: ×{calculationResult.factors.dayPeriod}
+                  </span>
+                  {calculationResult.factors.precipitation && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800" role="listitem">
+                      Weather: ×{calculationResult.factors.precipitation}
                     </span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800" role="listitem">
-                      {dayPeriodLabel(config.dayPeriod)}: ×{calculationResult.factors.dayPeriod}
+                  )}
+                  {calculationResult.factors.wind && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" role="listitem">
+                      Strong Wind: ×{calculationResult.factors.wind}
                     </span>
-                    {calculationResult.factors.precipitation && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800" role="listitem">
-                        Weather: ×{calculationResult.factors.precipitation}
-                      </span>
-                    )}
-                    {calculationResult.factors.wind && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" role="listitem">
-                        Strong Wind: ×{calculationResult.factors.wind}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
+      {weatherLoading && (
+        <div aria-live="polite" aria-busy="true">
+          <WeatherSkeleton />
+        </div>
+      )}
+
+      {weatherError && !isOffline && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert" aria-live="polite">
+          <div className="flex">
+            <div className="flex-shrink-0" aria-hidden="true">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Weather Error</h3>
+              <div className="mt-1 text-sm text-red-700">
+                <p>{weatherError}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {weatherData && !weatherLoading && (
+        <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+          <div className="flex items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              <svg className="inline w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Current Weather
+            </h2>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <dt className="font-medium text-gray-500">Temperature</dt>
+              <dd className="text-gray-900">{weatherData.tempC}°C</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-gray-500">Conditions</dt>
+              <dd className="text-gray-900">{precipitationLabel(weatherData.precipitationType)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-gray-500">Precipitation</dt>
+              <dd className="text-gray-900">{weatherData.precipitationMm} mm</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-gray-500">Wind Speed</dt>
+              <dd className="text-gray-900">{weatherData.windKph} km/h</dd>
+            </div>
+          </dl>
+
+          <p className="text-xs text-gray-500 mt-4">
+            Last updated: {new Date().toLocaleTimeString()}
+          </p>
+        </div>
+      )}
+
       <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Current Configuration</h2>
-        <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="flex items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            <svg className="inline w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            Current Configuration
+          </h2>
+        </div>
+
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <dt className="text-sm font-medium text-gray-500">Base Speed Limit</dt>
-            <dd className="text-lg font-semibold text-gray-900">{config.baseSpeedLimit} km/h</dd>
+            <dt className="font-medium text-gray-500">Base Speed Limit</dt>
+            <dd className="text-gray-900">{config.baseSpeedLimit} km/h</dd>
           </div>
           <div>
-            <dt className="text-sm font-medium text-gray-500">Surface</dt>
-            <dd className="text-lg font-semibold text-gray-900">{surfaceLabel(config.surface)}</dd>
+            <dt className="font-medium text-gray-500">Road Surface</dt>
+            <dd className="text-gray-900">{surfaceLabel(config.surface)}</dd>
           </div>
           <div>
-            <dt className="text-sm font-medium text-gray-500">Day Period</dt>
-            <dd className="text-lg font-semibold text-gray-900">{dayPeriodLabel(config.dayPeriod)}</dd>
+            <dt className="font-medium text-gray-500">Day Period</dt>
+            <dd className="text-gray-900">{dayPeriodLabel(config.dayPeriod)}</dd>
           </div>
           <div>
-            <dt className="text-sm font-medium text-gray-500">External Weather</dt>
-            <dd className="text-lg font-semibold text-gray-900">{config.enableExternalWeather ? 'Enabled' : 'Disabled'}</dd>
+            <dt className="font-medium text-gray-500">Weather Integration</dt>
+            <dd className="text-gray-900">Always Enabled</dd>
           </div>
         </dl>
       </div>
 
-      <section className="bg-white p-4 md:p-6 rounded-lg shadow" aria-labelledby="history-heading">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-3">
-          <h2 id="history-heading" className="text-lg font-semibold text-gray-900">Calculation History</h2>
+      <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Calculation History</h2>
           {history.length > 0 && (
             <button
               onClick={handleClearHistory}
-              className="px-3 py-1 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-              aria-label="Clear all calculation history"
+              className="text-sm text-red-600 hover:text-red-700 focus:outline-none focus:underline"
             >
               Clear History
             </button>
@@ -534,65 +429,27 @@ export default function DriverDashboard() {
         </div>
 
         {history.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            }
-            title="No History Yet"
-            description="No calculations yet. Use the calculator above to start tracking your speed calculations."
-            action={undefined}
-          />
+          <p className="text-sm text-gray-500 text-center py-8">No calculations yet. Click Refresh to start.</p>
         ) : (
-          <div className="space-y-3 max-h-96 overflow-y-auto" role="list">
-            {history.map((entry, index) => {
-              const safetyStatus = getSafetyStatus(entry);
-              return (
-                <article
-                  key={entry.timestampISO}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 rounded-lg gap-3 focus-within:ring-2 focus-within:ring-blue-500"
-                  role="listitem"
-                  aria-label={`Calculation ${index + 1}: ${entry.computedMax} km/h, ${safetyStatus}`}
-                >
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    <div className="flex-shrink-0" aria-hidden="true">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        safetyStatus === 'safe' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {safetyStatus === 'safe' ? 'Safe' : 'Caution'}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        Max Speed: {entry.computedMax} km/h
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {formatTimestamp(entry.timestampISO)} •
-                        {surfaceLabel(entry.configSnapshot.surface)} •
-                        {dayPeriodLabel(entry.configSnapshot.dayPeriod)}
-                        {entry.weatherSnapshot && (
-                          <> • {precipitationLabel(entry.weatherSnapshot.precipitationType)} • {entry.weatherSnapshot.windKph} km/h wind</>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 sm:flex-shrink-0">
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-gray-900">{entry.computedMax}</div>
-                      <div className="text-xs text-gray-500">km/h</div>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
+          <div className="space-y-3">
+            {history.map((entry) => (
+              <div key={entry.timestampISO} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-900">
+                    Max: {entry.computedMax} km/h
+                  </span>
+                  <span className="text-xs text-gray-500">{formatTimestamp(entry.timestampISO)}</span>
+                </div>
+                {entry.weatherSnapshot && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    Weather: {precipitationLabel(entry.weatherSnapshot.precipitationType)}, {entry.weatherSnapshot.tempC}°C
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }

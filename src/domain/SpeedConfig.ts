@@ -6,4 +6,8 @@ export interface SpeedConfig {
   surface: Surface;
   dayPeriod: DayPeriod;
   enableExternalWeather: boolean;
+  defaultLocation?: {
+    lat: number;
+    lon: number;
+  };
 }

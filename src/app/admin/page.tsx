@@ -12,6 +12,8 @@ interface FormData {
   surface: Surface;
   dayPeriod: DayPeriod;
   enableExternalWeather: boolean;
+  defaultLat: string;
+  defaultLon: string;
 }
 
 const DEFAULT_CONFIG: SpeedConfig = {
@@ -19,6 +21,10 @@ const DEFAULT_CONFIG: SpeedConfig = {
   surface: Surface.asphalt,
   dayPeriod: DayPeriod.day,
   enableExternalWeather: true,
+  defaultLocation: {
+    lat: 45.5017,
+    lon: -73.5673
+  },
 };
 
 export default function AdminSettings() {
@@ -35,6 +41,8 @@ function AdminSettingsContent() {
     surface: DEFAULT_CONFIG.surface,
     dayPeriod: DEFAULT_CONFIG.dayPeriod,
     enableExternalWeather: DEFAULT_CONFIG.enableExternalWeather,
+    defaultLat: DEFAULT_CONFIG.defaultLocation.lat.toString(),
+    defaultLon: DEFAULT_CONFIG.defaultLocation.lon.toString(),
   });
   const [persistedConfig, setPersistedConfig] = useState<SpeedConfig>(DEFAULT_CONFIG);
   const [showToast, setShowToast] = useState(false);
@@ -49,6 +57,8 @@ function AdminSettingsContent() {
         surface: savedConfig.surface,
         dayPeriod: savedConfig.dayPeriod,
         enableExternalWeather: savedConfig.enableExternalWeather,
+        defaultLat: (savedConfig.defaultLocation?.lat || DEFAULT_CONFIG.defaultLocation.lat).toString(),
+        defaultLon: (savedConfig.defaultLocation?.lon || DEFAULT_CONFIG.defaultLocation.lon).toString(),
       });
     }
   }, []);
@@ -77,13 +87,17 @@ function AdminSettingsContent() {
       surface: formData.surface,
       dayPeriod: formData.dayPeriod,
       enableExternalWeather: formData.enableExternalWeather,
+      defaultLat: parseFloat(formData.defaultLat) || 0,
+      defaultLon: parseFloat(formData.defaultLon) || 0,
     };
 
     return (
       currentConfig.baseSpeedLimit !== persistedConfig.baseSpeedLimit ||
       currentConfig.surface !== persistedConfig.surface ||
       currentConfig.dayPeriod !== persistedConfig.dayPeriod ||
-      currentConfig.enableExternalWeather !== persistedConfig.enableExternalWeather
+      currentConfig.enableExternalWeather !== persistedConfig.enableExternalWeather ||
+      currentConfig.defaultLat !== (persistedConfig.defaultLocation?.lat || 0) ||
+      currentConfig.defaultLon !== (persistedConfig.defaultLocation?.lon || 0)
     );
   }, [formData, persistedConfig]);
 
@@ -93,6 +107,16 @@ function AdminSettingsContent() {
     const speedLimit = parseFloat(formData.baseSpeedLimit);
     if (isNaN(speedLimit) || speedLimit <= 0 || speedLimit > 200) {
       newErrors.baseSpeedLimit = 'Speed limit must be a number between 1 and 200 km/h';
+    }
+
+    const lat = parseFloat(formData.defaultLat);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      newErrors.defaultLat = 'Latitude must be a number between -90 and 90';
+    }
+
+    const lon = parseFloat(formData.defaultLon);
+    if (isNaN(lon) || lon < -180 || lon > 180) {
+      newErrors.defaultLon = 'Longitude must be a number between -180 and 180';
     }
 
     setErrors(newErrors);
@@ -110,7 +134,11 @@ function AdminSettingsContent() {
       baseSpeedLimit: parseFloat(formData.baseSpeedLimit),
       surface: formData.surface,
       dayPeriod: formData.dayPeriod,
-      enableExternalWeather: formData.enableExternalWeather,
+      enableExternalWeather: true,
+      defaultLocation: {
+        lat: parseFloat(formData.defaultLat),
+        lon: parseFloat(formData.defaultLon),
+      },
     };
 
     const success = set(STORAGE_KEYS.SAFE_SPEED_CONFIG, config);
@@ -135,6 +163,8 @@ function AdminSettingsContent() {
         surface: persistedConfig.surface,
         dayPeriod: persistedConfig.dayPeriod,
         enableExternalWeather: persistedConfig.enableExternalWeather,
+        defaultLat: (persistedConfig.defaultLocation?.lat || DEFAULT_CONFIG.defaultLocation.lat).toString(),
+        defaultLon: (persistedConfig.defaultLocation?.lon || DEFAULT_CONFIG.defaultLocation.lon).toString(),
       });
       setErrors({});
     }
@@ -151,6 +181,8 @@ function AdminSettingsContent() {
         surface: DEFAULT_CONFIG.surface,
         dayPeriod: DEFAULT_CONFIG.dayPeriod,
         enableExternalWeather: DEFAULT_CONFIG.enableExternalWeather,
+        defaultLat: DEFAULT_CONFIG.defaultLocation.lat.toString(),
+        defaultLon: DEFAULT_CONFIG.defaultLocation.lon.toString(),
       });
       setErrors({});
     }
@@ -273,20 +305,78 @@ function AdminSettingsContent() {
                   id="enableExternalWeather"
                   name="enableExternalWeather"
                   type="checkbox"
-                  checked={formData.enableExternalWeather}
-                  onChange={(e) => setFormData(prev => ({ ...prev, enableExternalWeather: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  checked={true}
+                  disabled={true}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded opacity-50 cursor-not-allowed"
                   aria-describedby="external-weather-description"
                 />
               </div>
               <div className="ml-3">
-                <label htmlFor="enableExternalWeather" className="text-sm font-medium text-gray-700">
-                  Enable External Weather Integration
+                <label htmlFor="enableExternalWeather" className="text-sm font-medium text-gray-500 cursor-not-allowed">
+                  Enable External Weather Integration (Forced)
                 </label>
-                <p id="external-weather-description" className="text-xs text-gray-500">
-                  Allow drivers to use real-time weather data in their calculations
+                <p id="external-weather-description" className="text-xs text-gray-400">
+                  External weather integration is always enabled for optimal safety calculations
                 </p>
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="defaultLat" className="block text-sm font-medium text-gray-700 mb-2">
+                Default Latitude <span className="text-red-500" aria-label="required">*</span>
+              </label>
+              <input
+                type="number"
+                id="defaultLat"
+                name="defaultLat"
+                value={formData.defaultLat}
+                onChange={(e) => setFormData(prev => ({ ...prev, defaultLat: e.target.value }))}
+                className={`block w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.defaultLat ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
+                }`}
+                placeholder="45.5017"
+                min="-90"
+                max="90"
+                step="0.0001"
+                aria-invalid={!!errors.defaultLat}
+                aria-describedby={errors.defaultLat ? 'lat-error' : 'lat-description'}
+                required
+              />
+              <p id="lat-description" className="sr-only">Enter a default latitude between -90 and 90</p>
+              {errors.defaultLat && (
+                <p id="lat-error" className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.defaultLat}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="defaultLon" className="block text-sm font-medium text-gray-700 mb-2">
+                Default Longitude <span className="text-red-500" aria-label="required">*</span>
+              </label>
+              <input
+                type="number"
+                id="defaultLon"
+                name="defaultLon"
+                value={formData.defaultLon}
+                onChange={(e) => setFormData(prev => ({ ...prev, defaultLon: e.target.value }))}
+                className={`block w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.defaultLon ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
+                }`}
+                placeholder="-73.5673"
+                min="-180"
+                max="180"
+                step="0.0001"
+                aria-invalid={!!errors.defaultLon}
+                aria-describedby={errors.defaultLon ? 'lon-error' : 'lon-description'}
+                required
+              />
+              <p id="lon-description" className="sr-only">Enter a default longitude between -180 and 180</p>
+              {errors.defaultLon && (
+                <p id="lon-error" className="mt-1 text-sm text-red-600" role="alert">
+                  {errors.defaultLon}
+                </p>
+              )}
             </div>
 
             {errors.submit && (
