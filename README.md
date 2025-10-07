@@ -102,8 +102,8 @@ src/
 ## Cómo ejecutar
 
 # Requisitos: Node 18+
-pnpm install          # o npm install
-pnpm dev              # o npm run dev
+pnpm install o npm install
+pnpm dev o npm run dev
 # abrir http://localhost:3000
 Cuentas demo
 
@@ -111,7 +111,7 @@ Admin: admin@fleetsafety.com / admin123
 
 Driver: registro desde /register y elegí rol driver.
 
-Nota: la autenticación es sólo para demo y usa localStorage. No utilizar en producción.
+Nota: la autenticación es sólo para demo y usa localStorage.
 
 Convención de ramas y commits
 Ramas: feature/NN-nombre, task/NN-nombre, hotfix/NN-nombre
@@ -120,4 +120,4 @@ Commits: [#ISSUE][FEATURE|TASK|HOTFIX] Mensaje
 Ej.: [#12][FEATURE] Driver dashboard: runtime history cards
 
 Más info
-Ver la Wiki del repo para arquitectura, pantallas y mapeo de requisitos de la cátedra.
+Ver la [Wiki](https://github.com/1337B/parcial-1-pd-acn4bv-bielaszczuk-cristhian/wiki) del repo para arquitectura, pantallas y mapeo de requisitos de la cátedra.
