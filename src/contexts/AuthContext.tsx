@@ -75,16 +75,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const users = get<User[]>(STORAGE_KEYS.SAFE_SPEED_USERS) || [];
     const passwordHash = hashPassword(email, password);
 
+    console.log('Login attempt for:', email);
+    console.log('Available users:', users.map(u => ({ email: u.email, role: u.role })));
+
     const foundUser = users.find(u =>
       u.email.toLowerCase() === email.toLowerCase() &&
       u.passwordHash === passwordHash
     );
 
     if (foundUser) {
+      console.log('Login successful for user:', { email: foundUser.email, role: foundUser.role });
       setUser(foundUser);
       localStorage.setItem('fleetsafety_current_user', foundUser.id);
       return { success: true };
     } else {
+      console.log('Login failed - user not found or password incorrect');
       return { success: false, error: 'Invalid email or password' };
     }
   };
