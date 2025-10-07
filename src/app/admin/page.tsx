@@ -197,7 +197,7 @@ function AdminSettingsContent() {
                 name="baseSpeedLimit"
                 value={formData.baseSpeedLimit}
                 onChange={(e) => setFormData(prev => ({ ...prev, baseSpeedLimit: e.target.value }))}
-                className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`block w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.baseSpeedLimit ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
                 }`}
                 placeholder="50"
@@ -224,7 +224,7 @@ function AdminSettingsContent() {
                 name="surface"
                 value={formData.surface}
                 onChange={(e) => setFormData(prev => ({ ...prev, surface: e.target.value as Surface }))}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-describedby="surface-description"
                 required
               >
@@ -392,17 +392,17 @@ function AdminSettingsContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="bg-white p-4 md:p-6 rounded-lg shadow" aria-labelledby="users-heading">
           <h2 id="users-heading" className="text-lg font-semibold text-gray-900 mb-4">User Management</h2>
-          <dl className="space-y-3">
+          <dl className="space-y-3 text-gray-900">
             <div className="flex justify-between items-center">
-              <dt>Active Drivers</dt>
+              <dt className="font-medium">Active Drivers</dt>
               <dd className="font-semibold">24</dd>
             </div>
             <div className="flex justify-between items-center">
-              <dt>Admin Users</dt>
+              <dt className="font-medium">Admin Users</dt>
               <dd className="font-semibold">3</dd>
             </div>
             <div className="flex justify-between items-center">
-              <dt>Pending Invites</dt>
+              <dt className="font-medium">Pending Invites</dt>
               <dd className="font-semibold">2</dd>
             </div>
           </dl>
@@ -410,17 +410,17 @@ function AdminSettingsContent() {
 
         <section className="bg-white p-4 md:p-6 rounded-lg shadow" aria-labelledby="fleet-heading">
           <h2 id="fleet-heading" className="text-lg font-semibold text-gray-900 mb-4">Fleet Overview</h2>
-          <dl className="space-y-3">
+          <dl className="space-y-3 text-gray-900">
             <div className="flex justify-between items-center">
-              <dt>Total Vehicles</dt>
+              <dt className="font-medium">Total Vehicles</dt>
               <dd className="font-semibold">32</dd>
             </div>
             <div className="flex justify-between items-center">
-              <dt>Active Routes</dt>
+              <dt className="font-medium">Active Routes</dt>
               <dd className="font-semibold">18</dd>
             </div>
             <div className="flex justify-between items-center">
-              <dt>Maintenance Due</dt>
+              <dt className="font-medium">Maintenance Due</dt>
               <dd className="font-semibold text-yellow-600">4</dd>
             </div>
           </dl>

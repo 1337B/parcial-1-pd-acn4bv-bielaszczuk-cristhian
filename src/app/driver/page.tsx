@@ -7,6 +7,8 @@ import { get, set, STORAGE_KEYS } from '@/lib/storage/safeStorage';
 import { useWeather } from '@/hooks';
 import { surfaceLabel, surfaceFactor, dayPeriodLabel, dayPeriodFactor, precipitationLabel, precipitationFactor } from '@/lib/mappers';
 import { WeatherSkeleton, EmptyState } from '@/components/ui';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 interface LocationInputs {
   lat: string;
@@ -37,6 +39,8 @@ const DEFAULT_LOCATION: LocationInputs = {
 };
 
 export default function DriverDashboard() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
   const [config, setConfig] = useState<SpeedConfig | null>(null);
   const [location, setLocation] = useState<LocationInputs>(DEFAULT_LOCATION);
   const [useExternalWeather, setUseExternalWeather] = useState(false);
@@ -171,6 +175,27 @@ export default function DriverDashboard() {
     });
   };
 
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
   if (config === null) {
     return (
       <div className="space-y-6">
@@ -262,7 +287,7 @@ export default function DriverDashboard() {
                     step="any"
                     value={location.lat}
                     onChange={(e) => setLocation(prev => ({ ...prev, lat: e.target.value }))}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     aria-describedby="lat-description"
                     required
                   />
@@ -279,7 +304,7 @@ export default function DriverDashboard() {
                     step="any"
                     value={location.lon}
                     onChange={(e) => setLocation(prev => ({ ...prev, lon: e.target.value }))}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     aria-describedby="lon-description"
                     required
                   />
@@ -300,7 +325,7 @@ export default function DriverDashboard() {
                 max="200"
                 value={currentSpeedInput}
                 onChange={(e) => handleSpeedInputChange(e.target.value)}
-                className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`block w-full px-3 py-2 border rounded-md shadow-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   speedValidationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter your current speed"

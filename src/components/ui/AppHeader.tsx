@@ -1,21 +1,31 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { BackButton } from './BackButton';
 
 export function AppHeader() {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const handleLogout = () => {
     logout();
+    router.push('/login');
   };
+
+  const showBackButton = pathname !== '/home' && pathname !== '/';
 
   return (
     <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
-        <h1 className="text-xl md:text-2xl font-semibold text-white">
-          FleetSafety
-        </h1>
+        <div className="flex items-center space-x-4">
+          {showBackButton && <BackButton />}
+          <h1 className="text-xl md:text-2xl font-semibold text-white">
+            FleetSafety
+          </h1>
+        </div>
 
         <nav className="flex items-center space-x-6">
           {user ? (

@@ -15,13 +15,13 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
+        // Not logged in - redirect to login
         redirect('/login');
       } else if (requiredRole && user.role !== requiredRole) {
+        // User doesn't have required role
         if (requiredRole === 'admin' && user.role === 'driver') {
-          redirect('/driver');
-        }
-        else if (requiredRole === 'driver' && user.role === 'admin') {
-          redirect('/admin');
+          // Driver trying to access admin - redirect to home
+          redirect('/home');
         }
       }
     }
@@ -29,10 +29,10 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <p className="mt-2 text-gray-300">Loading...</p>
         </div>
       </div>
     );
