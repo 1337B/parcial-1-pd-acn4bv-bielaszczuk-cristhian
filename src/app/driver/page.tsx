@@ -175,8 +175,8 @@ export default function DriverDashboard() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Driver Dashboard</h1>
-          <p className="text-gray-600">Your personal driver portal and speed calculator</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-100">Driver Dashboard</h1>
+          <p className="text-gray-300 mt-1">Your personal driver portal and speed calculator</p>
         </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -213,8 +213,8 @@ export default function DriverDashboard() {
       </a>
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Driver Dashboard</h1>
-        <p className="text-gray-600">Your personal driver portal and speed calculator</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-100">Driver Dashboard</h1>
+        <p className="text-gray-300 mt-1">Your personal driver portal and speed calculator</p>
       </div>
 
       {useExternalWeather && isOffline && (

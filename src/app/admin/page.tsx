@@ -163,8 +163,8 @@ function AdminSettingsContent() {
       </a>
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Settings</h1>
-        <p className="text-gray-600">System administration and fleet management configuration</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-100">Admin Settings</h1>
+        <p className="text-gray-300 mt-1">System administration and fleet management configuration</p>
       </div>
 
       {showToast && (
